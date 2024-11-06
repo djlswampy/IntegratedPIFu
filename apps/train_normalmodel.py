@@ -9,7 +9,7 @@ os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-import random
+import random 
 import numpy as np
 import cv2
 import pickle
@@ -66,27 +66,40 @@ def train(opt):
 
     print("using device {}".format(device))
     
-    # 데이터셋 초기화 (평가 모드가 아님)
-    train_dataset = NormalDataset(opt, evaluation_mode=False)
+    # 훈련 데이터셋 초기화
+    train_dataset = NormalDataset(opt, evaluation_mode=False, validation_mode=True)
+
+    # 검증 데이터셋 초기화
+    val_dataset = NormalDataset(opt, evaluation_mode=False, validation_mode=True)
+
+
+    # TODO test_dataset으로 eval 수행
+    # TODO 에포크마다 train과 eval 결과 저장
+    # TODO 에포크마다 train과 eval 결과를 비교
+
     
-    # 데이터 로더 설정 (배치 사이즈 및 다중 스레드 사용)
+    # 훈련 데이터 데이터 로더 초기화
     train_data_loader = DataLoader(train_dataset, 
                                    batch_size=batch_size, shuffle=not opt.serial_batches,
                                    num_workers=opt.num_threads, pin_memory=opt.pin_memory)
-
     print('train loader size: ', len(train_data_loader))
+
+    # 검증 데이터 데이터 로더 초기화
+    val_data_loader = DataLoader(val_dataset, 
+                                    batch_size=batch_size, shuffle=not opt.serial_batches,
+                                    num_workers=opt.num_threads, pin_memory=opt.pin_memory)
+    print('train loader size: ', len(val_data_loader))
+
 
     # 손실 함수로 Smooth L1 Loss 사용
     smoothL1Loss = nn.SmoothL1Loss()
     
     # 네트워크 정의 (Generator)
     netF = define_G(3, 3, 64, "global", 4, 9, 1, 3, "instance")
-    netB = define_G(3, 3, 64, "global", 4, 9, 1, 3, "instance")
 
     # 모델 가중치 로드 (필요 시)
     if load_model: 
         F_modelnormal_path = "apps/checkpoints/Date_12_Nov_21_Time_01_38_54/netF_model_state_dict.pickle"
-        B_modelnormal_path = "apps/checkpoints/Date_12_Nov_21_Time_01_38_54/netB_model_state_dict.pickle"
 
         print('Resuming from ', F_modelnormal_path)
         print('Resuming from ', B_modelnormal_path)
@@ -94,11 +107,8 @@ def train(opt):
         with open(F_modelnormal_path, 'rb') as handle:
             netF_state_dict = pickle.load(handle)
 
-        with open(B_modelnormal_path, 'rb') as handle:
-            netB_state_dict = pickle.load(handle)
 
         netF.load_state_dict(netF_state_dict, strict=True)
-        netB.load_state_dict(netB_state_dict, strict=True)
         
     # 경로가 존재하지 않으면 체크포인트와 결과 저장 경로 생성
     if not os.path.exists(opt.checkpoints_path):
@@ -117,11 +127,9 @@ def train(opt):
 
     # 네트워크를 디바이스에 로드
     netF = netF.to(device=device)
-    netB = netB.to(device=device)
 
     # 옵티마이저 초기화
     optimizer_netF = torch.optim.RMSprop(netF.parameters(), lr=lr, momentum=0, weight_decay=0)
-    optimizer_netB = torch.optim.RMSprop(netB.parameters(), lr=lr, momentum=0, weight_decay=0)
 
     # 학습 시작
     start_epoch = 0
@@ -129,7 +137,6 @@ def train(opt):
         print("start of epoch {}".format(epoch))
 
         netF.train()
-        netB.train()
 
         train_len = len(train_data_loader)
         for train_idx, train_data in enumerate(train_data_loader):
@@ -142,11 +149,9 @@ def train(opt):
 
             # 네트워크의 순전파
             res_netF = netF.forward(render_tensor)
-            res_netB = netB.forward(render_tensor)
 
             # 손실 계산 (Smooth L1 Loss)
             err_netF = smoothL1Loss(res_netF, nmlF_high_res_tensor) 
-            err_netB = smoothL1Loss(res_netB, nmlB_high_res_tensor)
    
             # 옵티마이저를 통한 네트워크 학습
             optimizer_netF.zero_grad()
@@ -154,31 +159,29 @@ def train(opt):
             curr_loss_netF = err_netF.item()
             optimizer_netF.step()
 
-            optimizer_netB.zero_grad()
-            err_netB.backward()
-            curr_loss_netB = err_netB.item()
-            optimizer_netB.step()
-
             print(
-                'Name: {0} | Epoch: {1} | curr_loss_netF: {2:.06f} | curr_loss_netB: {3:.06f}  | LR: {4:.06f} '.format(
-                    opt.name, epoch, curr_loss_netF, curr_loss_netB, lr)
+                'Name: {0} | Epoch: {1} | curr_loss_netF: {2:.06f} | LR: {3:.06f} '.format(
+                    opt.name, epoch, curr_loss_netF, lr)
             )
 
-        # 학습률 조정
-        lr = adjust_learning_rate([optimizer_netF, optimizer_netB], epoch, lr, schedule=normal_schedule, learning_rate_decay=0.1)
 
-        with torch.no_grad():
+
+        # 학습률 조정
+        lr = adjust_learning_rate(optimizer_netF, epoch, lr, schedule=normal_schedule, learning_rate_decay=0.1)
+
+        #  학습 중간에 모델을 평가하고 결과를 저장
+        with torch.no_grad(): # 평가 시 그래디언트 계산 비활성화
             if True:
-                # 모델 저장
+                # 현재 모델 상태를 pickle 파일로 저장
                 with open('%s/%s/netF_model_state_dict.pickle' % (opt.checkpoints_path, opt.name), 'wb') as handle:
                     pickle.dump(netF.state_dict(), handle, protocol=pickle.HIGHEST_PROTOCOL)
-                with open('%s/%s/netB_model_state_dict.pickle' % (opt.checkpoints_path, opt.name), 'wb') as handle:
-                    pickle.dump(netB.state_dict(), handle, protocol=pickle.HIGHEST_PROTOCOL)
 
                 print('generate normal map (train) ...')
-                train_dataset.is_train = False
+                # train_dataset.is_train = False #  아무 의미 없는 코드
+                
+                # 네트워크를 평가 모드로 전환 (dropout, batch norm 등 비활성화)                
                 netF.eval()
-                netB.eval()
+
                 for gen_idx in tqdm(range(1)):
                     index_to_use = gen_test_counter % len(train_dataset)
                     gen_test_counter += 10
@@ -191,25 +194,18 @@ def train(opt):
                     image_tensor = torch.unsqueeze(image_tensor, 0)
 
                     original_nmlF_map = train_data['nmlF_high_res'].cpu().numpy()
-                    original_nmlB_map = train_data['nmlB_high_res'].cpu().numpy()
 
                     res_netF = netF.forward(image_tensor)
-                    res_netB = netB.forward(image_tensor)
 
                     res_netF = res_netF.detach().cpu().numpy()[0, :, :, :]
-                    res_netB = res_netB.detach().cpu().numpy()[0, :, :, :]
 
                     # 결과 저장 경로 설정
                     save_netF_normalmap_path = save_path[:-4] + 'netF_normalmap.png'
-                    save_netB_normalmap_path = save_path[:-4] + 'netB_normalmap.png'
                     numpy_save_netF_normalmap_path = save_path[:-4] + 'netF_normalmap.npy'
-                    numpy_save_netB_normalmap_path = save_path[:-4] + 'netB_normalmap.npy'
                     GT_netF_normalmap_path = save_path[:-4] + 'netF_groundtruth.png'
-                    GT_netB_normalmap_path = save_path[:-4] + 'netB_groundtruth.png'
 
                     # .npy 파일로 결과 저장
                     np.save(numpy_save_netF_normalmap_path, res_netF)
-                    np.save(numpy_save_netB_normalmap_path, res_netB)
 
                     # 이미지로 변환하여 저장
                     save_netF_normalmap = (np.transpose(res_netF, (1, 2, 0)) * 0.5 + 0.5) * 255.0
@@ -217,21 +213,11 @@ def train(opt):
                     save_netF_normalmap = Image.fromarray(save_netF_normalmap)
                     save_netF_normalmap.save(save_netF_normalmap_path)
 
-                    save_netB_normalmap = (np.transpose(res_netB, (1, 2, 0)) * 0.5 + 0.5) * 255.0
-                    save_netB_normalmap = save_netB_normalmap.astype(np.uint8)
-                    save_netB_normalmap = Image.fromarray(save_netB_normalmap)
-                    save_netB_normalmap.save(save_netB_normalmap_path)
-
                     # Ground truth 저장
                     GT_netF_normalmap = (np.transpose(original_nmlF_map, (1, 2, 0)) * 0.5 + 0.5) * 255.0
                     GT_netF_normalmap = GT_netF_normalmap.astype(np.uint8)
                     GT_netF_normalmap = Image.fromarray(GT_netF_normalmap)
                     GT_netF_normalmap.save(GT_netF_normalmap_path)
-
-                    GT_netB_normalmap = (np.transpose(original_nmlB_map, (1, 2, 0)) * 0.5 + 0.5) * 255.0
-                    GT_netB_normalmap = GT_netB_normalmap.astype(np.uint8)
-                    GT_netB_normalmap = Image.fromarray(GT_netB_normalmap)
-                    GT_netB_normalmap.save(GT_netB_normalmap_path)
 
                 train_dataset.is_train = True
 
