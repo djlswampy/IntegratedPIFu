@@ -13,105 +13,118 @@ from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 import torch.nn.functional as F
 
-# 데이터셋 로드 시 특정 맵을 로드할지 여부를 결정하는 플래그
-produce_normal_maps = True
-produce_coarse_depth_maps = False
-produce_fine_depth_maps = False 
-produce_parse_maps = False 
+# 3D 모델 생성용 추가 지도 맵의 생성 여부를 설정합니다.
+produce_normal_maps = True 
+produce_coarse_depth_maps = True
+produce_fine_depth_maps = True
+produce_parse_maps = True
 
+
+# 데이터셋 클래스를 정의합니다.
 class BuffDataset(Dataset):
-    def __init__(self, opt):
-        self.opt = opt  # 옵션 객체 저장
-        self.projection_mode = 'orthogonal'  # 투영 모드 설정
-        # 테스트할 주제 목록을 텍스트 파일에서 로드
-        self.subjects = np.loadtxt("/home/jo/IntegratedPIFu/buff_subject_testing.txt", dtype=str).tolist()
-        self.root = "/home/jo/IntegratedPIFu/dataset"  # 이미지 파일의 루트 디렉토리 설정
 
-        # PIL 이미지를 텐서로 변환하는 변환기 설정
+    # 초기화 함수. 데이터셋 초기 설정과 파일 경로 등을 설정합니다.
+    def __init__(self, opt):
+        self.opt = opt  # 옵션 설정을 가져옵니다.
+        self.projection_mode = 'orthogonal'  # 투영 모드를 '정사영'으로 설정합니다.
+        
+        # 테스트할 데이터셋의 subject(개체) 목록을 읽어옵니다.
+        self.subjects = np.loadtxt("buff_subject_testing.txt", dtype=str).tolist()
+
+        # 데이터셋의 루트 디렉토리를 설정합니다.
+        self.root = "buff_dataset/buff_rgb_images"
+
+        # 이미지를 텐서로 변환하고 정규화하기 위한 전처리 파이프라인 설정
         self.to_tensor = transforms.Compose([
-            transforms.ToTensor(),  # 이미지를 텐서로 변환
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))  # 텐서를 정규화
+            transforms.ToTensor(),  # 이미지를 (C x H x W) 형태의 텐서로 변환합니다.
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))  # 정규화하여 [-1, 1] 범위로 변환합니다.
         ])
 
+    # 데이터셋의 길이를 반환합니다.
     def __len__(self):
-        return len(self.subjects)  # 데이터셋의 길이 반환
+        return len(self.subjects)  # subjects 리스트의 길이 반환
 
+
+
+    # 특정 인덱스의 데이터를 반환하는 함수입니다.
     def get_item(self, index):
-        subject = self.subjects[index]  # 주제 이름 가져오기
+        # 현재 인덱스의 subject 이름을 가져옵니다.
+        subject = self.subjects[index]
 
-        # NOTE: 여기에 원래 카메라 파라미터 경로도 있었는데 구할 방법이 없어서 지우고 PIFu에서 기본 카메라 파라미터 설정하는 코드 가지고 와서 사용했음
-        # 각 주제에 대한 파일 경로 설정
+        # subject에 대한 각 파일 경로를 설정합니다.
+        param_path = os.path.join(self.root, "rendered_params_" + subject + ".npy") 
         render_path = os.path.join(self.root, "rendered_image_" + subject + ".png")
         mask_path = os.path.join(self.root, "rendered_mask_" + subject + ".png")
 
-        # 노멀 맵 경로 설정
+        # 선택한 경우, 각종 지도(노멀 맵, 깊이 맵 등) 파일 경로 설정
         if produce_normal_maps:
-            nmlF_high_res_path = os.path.join("/home/jo/IntegratedPIFu/dataset/normal_maps", "rendered_nmlF_" + subject + ".npy")
-            nmlB_high_res_path = os.path.join("/home/jo/IntegratedPIFu/dataset/normal_maps", "rendered_nmlB_" + subject + ".npy")
+            nmlF_high_res_path = os.path.join("buff_dataset/buff_normal_maps", "rendered_nmlF_" + subject + ".npy")
+            nmlB_high_res_path = os.path.join("buff_dataset/buff_normal_maps", "rendered_nmlB_" + subject + ".npy")
 
-        # 깊이 맵 경로 설정
         if produce_coarse_depth_maps:
             coarse_depth_map_path = os.path.join("buff_dataset/buff_depth_maps", "rendered_coarse_depthmap_" + subject + ".npy")
         
         if produce_fine_depth_maps:
             fine_depth_map_path = os.path.join("buff_dataset/buff_depth_maps", "rendered_depthmap_" + subject + ".npy")
 
-        # 파싱 맵 경로 설정
         if produce_parse_maps:
             parse_map_path = os.path.join("buff_dataset/buff_parse_maps", "rendered_parse_" + subject + ".npy")
 
-        load_size_associated_with_scale_factor = 1024  # 스케일 팩터와 관련된 로드 크기 설정
+        # 스케일 팩터에 따른 이미지 크기 설정
+        load_size_associated_with_scale_factor = 1024
 
-        # NOTE: 여기에 원래 이미지 카메라 파라미터 데이터를 사용해야하는데 구할 방법이 없어서 지우고 PIFu에서 기본 카메라 파라미터 설정하는 코드 가지고 와서 사용했음
-        # 카메라 파라미터를 기본값으로 설정
-        center = np.array([0.0, 0.0, 0.0])  # 카메라 중심 위치를 원점으로 설정
-        R = np.eye(3)  # 회전 행렬을 단위 행렬로 설정
-        scale_factor = 900.0  # 스케일 팩터를 1로 설정
+        # 카메라 매개변수를 포함하는 파일 로드
+        param = np.load(param_path, allow_pickle=True)
+        center = param.item().get('center')  # 카메라의 중심 위치
+        R = param.item().get('R')  # 회전 행렬
+        scale_factor = param.item().get('scale_factor')  # 스케일 팩터
 
-        # 바운딩 박스 계산
-        b_range = load_size_associated_with_scale_factor / scale_factor 
+        # 카메라 매개변수를 바탕으로 3D 공간의 범위 정의
+        b_range = load_size_associated_with_scale_factor / scale_factor
         b_center = center
         b_min = b_center - b_range / 2
         b_max = b_center + b_range / 2
 
-        # 외부 행렬 설정
+        # 3D 포인트의 회전 및 이동을 위한 외적 행렬 설정
         translate = -center.reshape(3, 1)
-        extrinsic = np.concatenate([R, translate], axis=1)
+        extrinsic = np.concatenate([R, translate], axis=1)  # 회전 후 이동
         extrinsic = np.concatenate([extrinsic, np.array([0, 0, 0, 1]).reshape(1, 4)], 0)
-        
-        # 내부 행렬 설정
+
+        # 스케일링 행렬 설정
         scale_intrinsic = np.identity(4)
-        scale_intrinsic[0, 0] = 1.0 * scale_factor  
-        scale_intrinsic[1, 1] = -1.0 * scale_factor  
-        scale_intrinsic[2, 2] = 1.0 * scale_factor   
+        scale_intrinsic[0, 0] = 1.0 * scale_factor
+        scale_intrinsic[1, 1] = -1.0 * scale_factor
+        scale_intrinsic[2, 2] = 1.0 * scale_factor
 
-        # 이미지 픽셀 공간을 UV 공간에 맞추기 위한 행렬 설정
+        # UV 좌표계와 픽셀 공간 매칭을 위한 행렬 설정
         uv_intrinsic = np.identity(4)
-        uv_intrinsic[0, 0] = 1.0 / float(load_size_associated_with_scale_factor // 2)  
-        uv_intrinsic[1, 1] = 1.0 / float(load_size_associated_with_scale_factor // 2)  
-        uv_intrinsic[2, 2] = 1.0 / float(load_size_associated_with_scale_factor // 2) 
+        uv_intrinsic[0, 0] = 1.0 / float(load_size_associated_with_scale_factor // 2)
+        uv_intrinsic[1, 1] = 1.0 / float(load_size_associated_with_scale_factor // 2)
+        uv_intrinsic[2, 2] = 1.0 / float(load_size_associated_with_scale_factor // 2)
 
-        # 최종 캘리브레이션 행렬 계산
-        intrinsic = np.matmul(uv_intrinsic, scale_intrinsic)
-        calib = torch.Tensor(np.matmul(intrinsic, extrinsic)).float() 
-        extrinsic = torch.Tensor(extrinsic).float()
-
-        # 마스크 및 렌더 이미지 로드
-        mask = Image.open(mask_path).convert('L')  
+        # 마스크와 렌더 이미지를 불러옵니다.
+        mask = Image.open(mask_path).convert('L')
         render = Image.open(render_path).convert('RGB')
+
+        # 총 내적 행렬을 만들어서 캘리브레이션 매트릭스로 설정
+        intrinsic = np.matmul(uv_intrinsic, scale_intrinsic)
+        calib = torch.Tensor(np.matmul(intrinsic, extrinsic)).float()
+        extrinsic = torch.Tensor(extrinsic).float()
 
         # 마스크를 텐서로 변환
         mask = transforms.ToTensor()(mask).float()
 
-        # 렌더 이미지를 텐서로 변환 및 정규화
-        render = self.to_tensor(render)
+        # 렌더 이미지를 정규화하여 텐서로 변환하고, 마스크를 적용합니다.
+        render = self.to_tensor(render)  # [0,255] 범위를 [-1,1] 범위로 정규화
         render = mask.expand_as(render) * render
 
-        # 저해상도 PIFu를 위한 이미지 크기 조정
-        render_low_pifu = F.interpolate(torch.unsqueeze(render, 0), size=(self.opt.loadSizeGlobal, self.opt.loadSizeGlobal))[0]
-        mask_low_pifu = F.interpolate(torch.unsqueeze(mask, 0), size=(self.opt.loadSizeGlobal, self.opt.loadSizeGlobal))[0]
+        # 로우 레졸루션 PIFu용으로 이미지를 512x512 크기로 축소
+        render_low_pifu = F.interpolate(torch.unsqueeze(render, 0), size=(self.opt.loadSizeGlobal, self.opt.loadSizeGlobal))
+        mask_low_pifu = F.interpolate(torch.unsqueeze(mask, 0), size=(self.opt.loadSizeGlobal, self.opt.loadSizeGlobal))
+        render_low_pifu = render_low_pifu[0]
+        mask_low_pifu = mask_low_pifu[0]
 
-        # 노멀 맵 로드 및 처리
+        # 각종 지도(노멀 맵, 깊이 맵 등)를 불러오고 마스크를 적용한 뒤 로우 레졸루션으로 변환
         if produce_normal_maps:
             nmlF_high_res = np.load(nmlF_high_res_path)
             nmlB_high_res = np.load(nmlB_high_res_path)
@@ -120,78 +133,62 @@ class BuffDataset(Dataset):
             nmlF_high_res = mask.expand_as(nmlF_high_res) * nmlF_high_res
             nmlB_high_res = mask.expand_as(nmlB_high_res) * nmlB_high_res
 
-            nmlF = F.interpolate(torch.unsqueeze(nmlF_high_res, 0), size=(self.opt.loadSizeGlobal, self.opt.loadSizeGlobal))[0]
-            nmlB = F.interpolate(torch.unsqueeze(nmlB_high_res, 0), size=(self.opt.loadSizeGlobal, self.opt.loadSizeGlobal))[0]
+            nmlF = F.interpolate(torch.unsqueeze(nmlF_high_res, 0), size=(self.opt.loadSizeGlobal, self.opt.loadSizeGlobal))
+            nmlF = nmlF[0]
+            nmlB = F.interpolate(torch.unsqueeze(nmlB_high_res, 0), size=(self.opt.loadSizeGlobal, self.opt.loadSizeGlobal))
+            nmlB = nmlB[0]
         else:
-            nmlF_high_res = nmlB_high_res = None
-            nmlF = nmlB = None 
+            nmlF_high_res = nmlB_high_res = 0
+            nmlF = nmlB = 0 
 
-        # 깊이 맵 로드 및 처리
+        # 깊이 맵 데이터 불러오기 및 전처리
         if produce_coarse_depth_maps:
             coarse_depth_map = np.load(coarse_depth_map_path)
             coarse_depth_map = torch.Tensor(coarse_depth_map)
             coarse_depth_map = mask.expand_as(coarse_depth_map) * coarse_depth_map
+
         else:
-            coarse_depth_map = None
+            coarse_depth_map = 0
 
         if produce_fine_depth_maps:
             fine_depth_map = np.load(fine_depth_map_path)
             fine_depth_map = torch.Tensor(fine_depth_map)
             fine_depth_map = mask.expand_as(fine_depth_map) * fine_depth_map
-            depth_map_low_res = F.interpolate(torch.unsqueeze(fine_depth_map, 0), size=(self.opt.loadSizeGlobal, self.opt.loadSizeGlobal))[0]
+            depth_map_low_res = F.interpolate(torch.unsqueeze(fine_depth_map, 0), size=(self.opt.loadSizeGlobal, self.opt.loadSizeGlobal))
+            depth_map_low_res = depth_map_low_res[0]
         else: 
-            fine_depth_map = None
-            depth_map_low_res = None 
+            fine_depth_map = 0
+            depth_map_low_res = 0 
 
-        # 파싱 맵 로드 및 처리
+        # 구문 분석 맵(파싱 맵) 데이터 불러오기 및 전처리
         if produce_parse_maps:
             human_parse_map = np.load(parse_map_path)
             human_parse_map = torch.Tensor(human_parse_map)
             human_parse_map = torch.unsqueeze(human_parse_map, 0)
             human_parse_map = mask.expand_as(human_parse_map) * human_parse_map
 
-            # 파싱 맵을 여러 채널로 분리
-            human_parse_map_list = []
-            for i in range(7):  # 클래스 수에 따라 조정
-                human_parse_map_i = (human_parse_map == i).float()
-                human_parse_map_list.append(human_parse_map_i)
-            human_parse_map = torch.cat(human_parse_map_list, dim=0)
-            human_parse_map = F.interpolate(torch.unsqueeze(human_parse_map, 0), size=(self.opt.loadSizeGlobal, self.opt.loadSizeGlobal))[0]
-        else:
-            human_parse_map = None
+            # 파싱 맵을 개별 채널로 나누고 병합하여 로우 레졸루션으로 변환
+            human_parse_map_0 = (human_parse_map == 0).float()
+            human_parse_map_1 = (human_parse_map == 1).float()
+            human_parse_map_2 = (human_parse_map == 2).float()
+            human_parse_map_3 = (human_parse_map == 3).float()
+            human_parse_map_4 = (human_parse_map == 4).float()
+            human_parse_map_5 = (human_parse_map == 5).float()
+            human_parse_map_6 = (human_parse_map == 6).float()
+            human_parse_map_list = [human_parse_map_0, human_parse_map_1, human_parse_map_2, human_parse_map_3, human_parse_map_4, human_parse_map_5, human_parse_map_6]
 
-        # 중심 지시자 생성
+            human_parse_map = torch.cat(human_parse_map_list, dim=0)
+            human_parse_map = F.interpolate(torch.unsqueeze(human_parse_map, 0), size=(self.opt.loadSizeGlobal, self.opt.loadSizeGlobal))
+            human_parse_map = human_parse_map[0]
+        else:
+            human_parse_map = 0
+
+        # 중심 표시용 인디케이터 설정
         center_indicator = np.zeros([1, 1024, 1024])
         center_indicator[:, 511:513, 511:513] = 1.0
         center_indicator = torch.Tensor(center_indicator).float()
-        
-        # NOTE: 여기서 노멀맵 생성하는 경우랑 그냥 데이터 로딩하는 경우로 나뉨. 노멀맵 생성하는 경우는 위쪽에 처리할 맵에 대한 변수 전부 False임
-        # NOTE: 그런데 처리할 맵에 대한 변수를 False로 설정하면 그와 관련된 속성들이 None으로 찍힘. 그로 인해 데이터 로더에서 None과 관련된 오류가 출력됨
-        # NOTE: 그래서 처리할 맵에 대한 변수를 False로 설정한 값들과 관련된 속성들은 전부 지우고 실행해야함
-        
-        """
-        이 코드를 이용해서 None으로 출력되는 속성은 제거하고 실행해야함
-        print(f"Subject: {subject}")
-        print(f"Render path: {render_path}")
-        print(f"Mask path: {mask_path}")
-        print(f"Render low PIFu: {render_low_pifu}")
-        print(f"Mask low PIFu: {mask_low_pifu}")
-        print(f"Original high res render: {render}")
-        print(f"Mask: {mask}")
-        print(f"Calib: {calib}")
-        print(f"Normal Map Front (high res): {nmlF_high_res}")
-        print(f"Normal Map Back (high res): {nmlB_high_res}")
-        print(f"Center Indicator: {center_indicator}")
-        print(f"Coarse Depth Map: {coarse_depth_map}")
-        print(f"Fine Depth Map: {fine_depth_map}")
-        print(f"Depth Map Low Res: {depth_map_low_res}")
-        print(f"Human Parse Map: {human_parse_map}")
-        print(f"Normal Map Front: {nmlF}")
-        print(f"Normal Map Back: {nmlB}")
-        print(f"B Min: {b_min}")
-        print(f"B Max: {b_max}")
-        """
 
+        # 데이터셋의 현재 항목을 딕셔너리 형태로 반환
         return {
             'name': subject,
             'render_path': render_path,
@@ -200,37 +197,19 @@ class BuffDataset(Dataset):
             'original_high_res_render': render,
             'mask': mask,
             'calib': calib,
-            'nmlF_high_res': nmlF_high_res,
-            'nmlB_high_res': nmlB_high_res,
-            'center_indicator': center_indicator,
+            'b_min': b_min,
+            'b_max': b_max,
             'nmlF': nmlF,
             'nmlB': nmlB,
-            'b_min': b_min,
-            'b_max': b_max
-        }
-        
-        """
-        return {
-            'name': subject,
-            'render_path': render_path,
-            'render_low_pifu': render_low_pifu,
-            'mask_low_pifu': mask_low_pifu,
-            'original_high_res_render': render,
-            'mask': mask,
-            'calib': calib,
             'nmlF_high_res': nmlF_high_res,
             'nmlB_high_res': nmlB_high_res,
-            'center_indicator': center_indicator,
-            'coarse_depth_map': coarse_depth_map,
             'depth_map': fine_depth_map,
             'depth_map_low_res': depth_map_low_res,
             'human_parse_map': human_parse_map,
-            'nmlF': nmlF,
-            'nmlB': nmlB,
-            'b_min': b_min,
-            'b_max': b_max
+            'center_indicator': center_indicator,
+            'coarse_depth_map': coarse_depth_map
         }
-        """
 
+    # PyTorch에서 데이터를 인덱스로 접근할 수 있게 하는 함수
     def __getitem__(self, index):
-        return self.get_item(index) 
+        return self.get_item(index)

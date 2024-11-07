@@ -20,8 +20,8 @@ import gc
 """
 low, high에 따라서 옵션 선택
 """
-# from lib.options import BaseOptions
-from lib.options_lowResPIFu import BaseOptions
+from lib.options import BaseOptions
+# from lib.options_lowResPIFu import BaseOptions
 from lib.model import HGPIFuNetwNML 
 from lib.data import TrainDataset
 from lib.mesh_util import save_obj_mesh_with_color, reconstruction, save_obj_mesh
@@ -45,7 +45,7 @@ test_script_activate_option_use_BUFF_dataset = False
 
 # 모델 및 옵티마이저 체크포인트 설정
 load_model_weights = True  # 모델 체크포인트 로드 여부
-load_model_weights_for_high_res_too = False  # 하이 피푸 모델 체크포인트 로드 여부
+load_model_weights_for_high_res_too = True  # 하이 피푸 모델 체크포인트 로드 여부
 load_model_weights_for_low_res_finetuning_config = 0 # 하이 피푸를 사용할 때, 로우 피푸의 가중치도 함께 수정하는 경우, 로우 피푸 옵티마이저 체크포인트 설정 (0: 체크포인트 로드 안 함, 1 또는 2: 특정 경로에서 체크포인트 로드)
 checkpoint_folder_to_load_low_res = '/home/public/IntegratedPIFu/checkpoints/first_low_pifu_test' # 로우 피푸 옵티마이저 체크포인트 경로
 checkpoint_folder_to_load_high_res = 'apps/checkpoints/Date_28_Jun_22_Time_02_49_38' # 하이 피푸 옵티마이저 체크포인트 경로
@@ -100,9 +100,7 @@ def gen_mesh(resolution, net, device, data, save_path, thresh=0.5, use_octree=Tr
     calib_tensor = torch.unsqueeze(calib_tensor,0)  # 배치 차원 추가
     
     b_min = data['b_min']  # 바운딩 박스 최소값
-    print('b_min: ', b_min)
     b_max = data['b_max']  # 바운딩 박스 최대값
-    print('b_max: ', b_max)
 
     # 저해상도 렌더링 이미지 불러오기
     image_low_tensor = data['render_low_pifu'].to(device=device)  
@@ -341,7 +339,9 @@ def train(opt):
 
     # 모델 가중치 로드
     if load_model_weights:
-        modelG_path = "/home/public/IntegratedPIFu/checkpoints/first_high_pifu_train/netG_model_state_dict_epoch1.pickle"  # 로드할 netG 가중치 경로 설정
+        modelG_path = "/home/public/integratedpifu_checkpoints/pretrained/netG_model_state_dict.pickle" # 로드할 netG 가중치 경로 설정
+        # modelG_path = "/home/public/integratedpifu_checkpoints/low_pifu_train_3/netG_model_state_dict_epoch1.pickle" # 로드할 netG 가중치 경로 설정
+        
         print('Resuming from ', modelG_path)  # 가중치 로드 경로 출력
 
         if device == 'cpu':
@@ -357,7 +357,7 @@ def train(opt):
         
         # 고해상도 모델 가중치 로드
         if opt.use_High_Res_Component and load_model_weights_for_high_res_too:
-            modelhighResG_path = "/home/public/IntegratedPIFu/checkpoints/first_high_pifu_train/highRes_netG_model_state_dict_epoch1.pickle"  # 고해상도 netG 가중치 경로 설정
+            modelhighResG_path = "/home/public/integratedpifu_checkpoints/pretrained/highRes_netG_model_state_dict.pickle"  # 고해상도 netG 가중치 경로 설정
             print('Resuming from ', modelhighResG_path)  # 가중치 로드 경로 출력
 
             if device == 'cpu':

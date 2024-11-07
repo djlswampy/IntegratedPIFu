@@ -4,7 +4,7 @@
 # modelG_path = 로드할 netG 가중치 경로 설정
 # test_script_activate = True
 
-NAME='low_pifu_generate_pretrain_3'
+NAME='low_pifu_generate_pretrain_10'
 SERIAL_BATCHES='--serial_batches'  # 랜덤 배치 옵션
 BATCH_SIZE='1'
 

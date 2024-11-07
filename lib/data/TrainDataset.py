@@ -77,7 +77,7 @@ class TrainDataset(Dataset):
             self.is_train = False
 
         # 루트 디렉터리 및 메쉬 디렉터리 설정
-        self.root = "rendering_script/buffer_fixed_full_mesh"
+        self.root = "/home/public/data/integratedpifu_data/buffer_fixed_full_mesh"
         self.mesh_directory = "/home/public/data/integratedpifu_data/thuman_data_sample"
         
         # 평가 모드가 아닌 경우 메쉬 로드
@@ -91,7 +91,7 @@ class TrainDataset(Dataset):
         if self.opt.use_groundtruth_normal_maps:
             self.normal_directory_high_res = "rendering_script/buffer_normal_maps_of_full_mesh"
         else:
-            self.normal_directory_high_res = "pretrained_normal_maps"
+            self.normal_directory_high_res = "/home/public/integratedpifu_results/pretrained_normal_maps"
 
         # GT 깊이 맵을 사용할지 여부에 따라 경로 설정
         if self.opt.useGTdepthmap:
@@ -283,8 +283,6 @@ class TrainDataset(Dataset):
             center = param.item().get('center')  # 카메라 3D 중심 위치
             R = param.item().get('R')  # CAD 모델을 회전시키기 위한 행렬
             scale_factor = param.item().get('scale_factor')  # 카메라 스케일링 정보
-            print('center: ', center)
-            print('scale_factor: ', scale_factor)
 
             # b_range, b_center, b_min, b_max 계산 (바운딩 박스 설정)
             b_range = load_size_associated_with_scale_factor / scale_factor  # 예: 512 / scale_factor
@@ -440,9 +438,6 @@ class TrainDataset(Dataset):
                 'original_high_res_render': render,  # 고해상도 렌더링 이미지
                 'mask': mask,  # 고해상도 마스크
                 'calib': calib,  # 캘리브레이션 행렬
-                'extrinsic': extrinsic,  # 외부 행렬
-                'samples_low_res_pifu': sample_data['samples_low_res_pifu'],  # 저해상도 샘플
-                'labels_low_res_pifu': sample_data['labels_low_res_pifu'],  # 샘플 레이블
                 'b_min': b_min,  # 바운딩 박스 최소값
                 'b_max': b_max,  # 바운딩 박스 최대값
                 'nmlF': nmlF,  # 저해상도 앞쪽 Normal Map
@@ -451,7 +446,10 @@ class TrainDataset(Dataset):
                 'nmlB_high_res': nmlB_high_res,  # 고해상도 뒤쪽 Normal Map
                 'depth_map': depth_map,  # 고해상도 Depth Map
                 'depth_map_low_res': depth_map_low_res,  # 저해상도 Depth Map
-                'human_parse_map': human_parse_map  # Human Parse Map
+                'human_parse_map': human_parse_map,  # Human Parse Map
+                'extrinsic': extrinsic,  # 외부 행렬
+                'samples_low_res_pifu': sample_data['samples_low_res_pifu'],  # 저해상도 샘플
+                'labels_low_res_pifu': sample_data['labels_low_res_pifu']  # 샘플 레이블
             }
 
             return data

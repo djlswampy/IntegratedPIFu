@@ -1,8 +1,7 @@
-# 1. train_integratedPIFu에서 low-pifu 옵션 import
-# 2. load_model_weights, load_model_weights_for_high_res_too = False
-# 3. test_script_activate = False
+# train_integratedPIFu에서 low-pifu 옵션 import
+# test_script_activate, load_model_weights, load_model_weights_for_high_res_too = False
 
-NAME='first_low_pifu_test'
+NAME='low_pifu_train_4'
 NUM_EPOCH='2'
 SERIAL_BATCHES='--serial_batches'  # 랜덤 배치 옵션
 BATCH_SIZE='4'

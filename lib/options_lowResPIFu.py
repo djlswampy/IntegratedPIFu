@@ -53,7 +53,7 @@ class BaseOptions():
         parser.add_argument('--sigma_high_resolution_pifu', type=float, default=2.0, help='sigma for sampling') 
 
         parser.add_argument('--use_front_normal', default=True)
-        parser.add_argument('--use_back_normal', default=False) # can be True as well, we did not observe a real impact.
+        parser.add_argument('--use_back_normal', default=True) # can be True as well, we did not observe a real impact.
 
 
         parser.add_argument('--num_epoch', type=int, default=50, help='num epoch to train') # depends on user's preference as well. (e.g. how large is your train set / Did validation error stop decreasing etc.)
@@ -163,8 +163,8 @@ class BaseOptions():
 
 
         # path
-        parser.add_argument('--checkpoints_path', type=str, default='./checkpoints', help='path to save checkpoints')
-        parser.add_argument('--results_path', type=str, default='./results', help='path to save results ply')
+        parser.add_argument('--checkpoints_path', type=str, default='/home/public/integratedpifu_checkpoints', help='path to save checkpoints')
+        parser.add_argument('--results_path', type=str, default='/home/public/integratedpifu_results', help='path to save results ply')
         
 
 
