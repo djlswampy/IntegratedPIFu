@@ -18,20 +18,29 @@ import torch.nn.functional as F
 # NormalDataset 클래스 정의 - Dataset 클래스를 상속받아 PyTorch 데이터셋을 구현
 class NormalDataset(Dataset):
     # 클래스 초기화 함수
-    def __init__(self, opt, evaluation_mode=False):
+    def __init__(self, opt, evaluation_mode=False, validation_mode=False):
         self.opt = opt  # 옵션 객체를 인스턴스 변수로 저장
-        # 학습 데이터로 사용할 주제 목록을 텍스트 파일에서 로드
-        self.training_subject_list = np.loadtxt("normal_train_set_list.txt", dtype=str).tolist()
+
+        # 훈련모드인 경우 학습 데이터로 사용할 주제 목록을 텍스트 파일에서 로드
+        if not evaluation_mode and not validation_mode:
+            print("훈련 데이터 목록 로드")
+            self.training_subject_list = np.loadtxt("/home/dong/projects/IntegratedPIFu/data_list/normal/train.txt", dtype=str).tolist()
+
+        # 검증 모드일 경우, 검증 데이터 목록 로드
+        elif not evaluation_mode and validation_mode:
+            print("검증 데이터 목록 로드")
+            self.training_subject_list = np.loadtxt("/home/dong/projects/IntegratedPIFu/data_list/normal/val.txt", dtype=str).tolist()
 
         # 평가 모드일 경우, 학습 데이터 대신 테스트 데이터 목록을 로드
-        if evaluation_mode:
-            print("Overwriting self.training_subject_list!")
-            self.training_subject_list = np.loadtxt("test_set_list.txt", dtype=str).tolist()
+        elif evaluation_mode and not validation_mode:
+            print("테스트 데이터 목록 로드")
+            self.training_subject_list = np.loadtxt("/home/dong/projects/IntegratedPIFu/data_list/normal/test.txt", dtype=str).tolist()
             self.is_train = False
 
+
         # Ground Truth 법선 맵과 렌더링된 이미지를 저장한 디렉토리 경로 설정
-        self.groundtruth_normal_map_directory = "rendering_script/buffer_normal_maps_of_full_mesh"
-        self.root = "rendering_script/buffer_fixed_full_mesh"
+        self.groundtruth_normal_map_directory = "/home/public/data/integratedpifu_data/buffer_normal_maps_of_full_mesh"
+        self.root = "/home/public/data/integratedpifu_data/buffer_fixed_full_mesh"
 
         # 주제 리스트 저장
         self.subjects = self.training_subject_list   
