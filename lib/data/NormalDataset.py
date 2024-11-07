@@ -22,17 +22,17 @@ class NormalDataset(Dataset):
         self.opt = opt  # 옵션 객체를 인스턴스 변수로 저장
 
         # 훈련모드인 경우 학습 데이터로 사용할 주제 목록을 텍스트 파일에서 로드
-        if not evaluation_mode & not validation_mode:
+        if not evaluation_mode and not validation_mode:
             print("훈련 데이터 목록 로드")
             self.training_subject_list = np.loadtxt("/home/dong/projects/IntegratedPIFu/data_list/normal/train.txt", dtype=str).tolist()
 
         # 검증 모드일 경우, 검증 데이터 목록 로드
-        elif not evaluation_mode & validation_mode:
+        elif not evaluation_mode and validation_mode:
             print("검증 데이터 목록 로드")
             self.training_subject_list = np.loadtxt("/home/dong/projects/IntegratedPIFu/data_list/normal/val.txt", dtype=str).tolist()
 
         # 평가 모드일 경우, 학습 데이터 대신 테스트 데이터 목록을 로드
-        elif evaluation_mode & not validation_mode:
+        elif evaluation_mode and not validation_mode:
             print("테스트 데이터 목록 로드")
             self.training_subject_list = np.loadtxt("/home/dong/projects/IntegratedPIFu/data_list/normal/test.txt", dtype=str).tolist()
             self.is_train = False
